@@ -1,0 +1,12 @@
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+# ejecutable que genera `mix escript.build`
+/cyk
+/cyk.bat
+# arbol generado al validar una frase
+/arbol.html
