@@ -1,0 +1,3 @@
+# Gramatica ambigua clasica (Lab 6, problema 4): sirve para ver el contador de arboles.
+# "id + id * id" tiene dos derivaciones distintas.
+E -> E + E | E * E | ( E ) | id
