@@ -68,8 +68,8 @@ Este proyecto responde a una pregunta sencilla de enunciar y difícil de
 resolver: \textbf{dada una gramática y una frase, ¿esa frase pertenece al
 lenguaje que la gramática genera?}
 
-Para una gramática pequeña uno puede intentar derivar la frase a mano, como
-se hizo en los laboratorios del curso. Pero ese método tiene un problema: si
+Para una gramática pequeña uno puede intentar derivar la frase a mano. Pero
+ese método tiene un problema: si
 la gramática es ambigua o tiene recursión, uno puede quedarse probando
 derivaciones para siempre sin llegar a una respuesta. El algoritmo
 \textbf{CYK} (Cocke--Younger--Kasami) resuelve esto: siempre termina, siempre
@@ -242,7 +242,7 @@ lib/mix/tasks/cyk.ex & Registra el comando \texttt{mix cyk}. \\
 
 \subsection{Formato de entrada}
 
-Mantuvimos el mismo formato de los archivos que entregó el curso
+Mantuvimos el mismo formato de los archivos de referencia
 (\texttt{1.txt} y \texttt{1-cnf.txt}), para que el programa pueda leerlos tal
 cual:
 
@@ -264,8 +264,8 @@ Las reglas del formato son:
   \item Un símbolo es \textbf{no terminal} si aparece como cabeza de alguna
   producción. Todo lo demás es terminal. Esto es más robusto que fijarse en
   mayúsculas y permite nombres como \gram{A'}.
-  \item El \textbf{símbolo inicial} es la cabeza de la primera producción, tal
-  como lo define la presentación del curso.
+  \item El \textbf{símbolo inicial} es la cabeza de la primera producción, que
+  es la convención habitual.
 \end{itemize}
 
 Las gramáticas incluidas están en la carpeta \texttt{gramaticas/}:
@@ -276,7 +276,7 @@ Las gramáticas incluidas están en la carpeta \texttt{gramaticas/}:
 \textrm{\textbf{Archivo}} & \textbf{Contenido} \\
 \midrule
 ingles.txt          & La del enunciado del proyecto. \\
-aritmetica.txt      & Expresiones aritméticas: el archivo \texttt{1.txt} del curso. \\
+aritmetica.txt      & Expresiones aritméticas: el archivo \texttt{1.txt} de referencia. \\
 aritmetica-cnf.txt  & El CNF de referencia (\texttt{1-cnf.txt}), usado en las pruebas. \\
 ambigua.txt         & \texttt{E -> E + E | E * E | ( E ) | id}, para ver el conteo de árboles. \\
 \bottomrule
@@ -423,8 +423,8 @@ X1 -> E T2     X2 -> T X      X3 -> F Y
                                               13 -> 20 producciones
 \end{lstlisting}
 
-\textbf{Comparación con el CNF de referencia.} El curso entregó el archivo
-\texttt{1-cnf.txt} con la conversión esperada. Nuestro resultado tiene las
+\textbf{Comparación con el CNF de referencia.} Contamos con el archivo
+\texttt{1-cnf.txt}, que trae la conversión esperada. Nuestro resultado tiene las
 mismas 20 producciones y la misma estructura; solo cambian los nombres de las
 variables nuevas, que son arbitrarios:
 
@@ -688,7 +688,7 @@ cyk\_test.exs      & Frases aceptadas y rechazadas, conteo de árboles, forma de
 \end{center}
 
 La prueba de equivalencia merece explicación. No se puede comparar nuestro CNF
-contra el \texttt{1-cnf.txt} del curso línea por línea, porque los nombres de
+contra el \texttt{1-cnf.txt} de referencia línea por línea, porque los nombres de
 las variables nuevas son arbitrarios (nuestro \gram{T1} es su \gram{L}). Lo
 que sí tiene sentido es comparar \textbf{comportamiento}: la prueba corre CYK
 con las dos gramáticas sobre una lista de cadenas y verifica que acepten y
@@ -731,7 +731,7 @@ cuerpo largo que encontraba. Como \gram{( E )} aparece en tres reglas
 distintas, generaba \gram{X1}, \gram{X3} y \gram{X5} con el mismo contenido
 \gram{E T2}, dando 22 producciones donde el CNF de referencia tiene 20. Se
 agregó un registro de pares ya encadenados para reutilizarlos. Con eso el
-resultado coincide exactamente en tamaño y estructura con el del curso.
+resultado coincide exactamente en tamaño y estructura con el de referencia.
 
 \paragraph{La gramática del enunciado ya estaba en CNF.}
 Al correr los cuatro pasos sobre la gramática del proyecto, ninguno cambió
@@ -739,7 +739,7 @@ nada. No era un error: revisando regla por regla, todas son ya de la forma
 $A \to BC$ o $A \to a$, no hay épsilon, no hay unitarias y no hay símbolos
 inútiles. \gram{VP -> cooks} parece unitaria pero no lo es, porque
 \gram{cooks} es terminal, no variable. Por eso agregamos la gramática
-aritmética del curso, que sí ejercita los cuatro pasos de principio a fin.
+aritmética de referencia, que sí ejercita los cuatro pasos de principio a fin.
 
 \paragraph{Una ventana que colgaba el programa.}
 El árbol se abre en una ventana aparte. La primera implementación usaba
@@ -760,7 +760,7 @@ terminó siendo el mejor ejemplo de la advertencia del enunciado.
   \item \textbf{Separar la lógica de la interfaz desde el principio.} Permitió
   escribir pruebas sin simular una terminal, y cambiar la presentación sin
   riesgo de romper los algoritmos.
-  \item \textbf{Usar el ejemplo resuelto del curso como prueba automática.}
+  \item \textbf{Usar un ejemplo ya resuelto como prueba automática.}
   Tener \texttt{1.txt} y \texttt{1-cnf.txt} y poder verificar la equivalencia
   entre ambos dio mucha más confianza que revisar la salida a ojo.
   \item \textbf{Desconfiar de las mediciones de tiempo muy chicas.} Si el
@@ -800,7 +800,6 @@ mutación en ningún momento.
   Theory, Languages, and Computation}. 3ª edición.
   \item Aho, A., Lam, M., Sethi, R. y Ullman, J. \textit{Compiladores:
   principios, técnicas y herramientas}. 2ª edición.
-  \item Material del curso: presentación de introducción a gramáticas y laboratorios.
 \end{itemize}
 
 \end{document}
