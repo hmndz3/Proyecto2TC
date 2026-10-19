@@ -1,0 +1,806 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{forest}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{gris}{HTML}{6B7280}
+\definecolor{fondo}{HTML}{F6F7F9}
+\definecolor{borde}{HTML}{E3E6EA}
+\definecolor{acento}{HTML}{2F6B4F}
+
+\lstdefinestyle{codigo}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{fondo},
+  frame=single,
+  rulecolor=\color{borde},
+  framesep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  keywordstyle=\color{acento}\bfseries,
+  commentstyle=\color{gris}\itshape,
+  columns=fixed,
+  keepspaces=true,
+}
+\lstdefinelanguage{Elixir}{
+  morekeywords={def,defp,defmodule,defstruct,do,end,fn,if,else,case,cond,true,false,nil,for,reduce,into,when},
+  morecomment=[l]{\#},
+  morestring=[b]",
+}
+\lstset{style=codigo}
+
+\newcommand{\gram}[1]{\texttt{#1}}
+
+\title{\vspace{-1.5cm}\textbf{Proyecto 2 — Algoritmo CYK}\\[0.3cm]
+\large Simplificación de gramáticas libres de contexto y parsing}
+
+\author{%
+  Harry Mendez (24089) \\
+  Juan Gualim (24852) \\
+  Diego Parada (2020225)
+}
+
+\date{Teoría de la Computación \\ Universidad del Valle de Guatemala \\[0.2cm] Octubre 2026}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\small Repositorio: \url{https://github.com/hmndz3/Proyecto2TC}
+\end{center}
+
+\vspace{0.5cm}
+\tableofcontents
+\newpage
+
+% ====================================================================
+\section{Introducción}
+
+Este proyecto responde a una pregunta sencilla de enunciar y difícil de
+resolver: \textbf{dada una gramática y una frase, ¿esa frase pertenece al
+lenguaje que la gramática genera?}
+
+Para una gramática pequeña uno puede intentar derivar la frase a mano, como
+se hizo en los laboratorios del curso. Pero ese método tiene un problema: si
+la gramática es ambigua o tiene recursión, uno puede quedarse probando
+derivaciones para siempre sin llegar a una respuesta. El algoritmo
+\textbf{CYK} (Cocke--Younger--Kasami) resuelve esto: siempre termina, siempre
+da una respuesta correcta, y lo hace en tiempo polinomial.
+
+El precio que cobra CYK es que la gramática tiene que estar en
+\textbf{Forma Normal de Chomsky} (CNF): toda producción debe ser de la forma
+$A \to BC$ o $A \to a$. Casi ninguna gramática viene así escrita, por eso la
+primera mitad del proyecto es convertirla, y esa conversión tiene sus propias
+reglas que hay que aplicar en orden.
+
+Entonces el programa hace dos cosas:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Simplifica} la gramática y la lleva a CNF, en cuatro pasos.
+  \item \textbf{Valida} una frase con CYK, reportando sí o no, cuánto tardó y
+  el árbol de derivación.
+\end{enumerate}
+
+Está escrito en \textbf{Elixir}, sin librerías externas, y se usa desde la
+terminal.
+
+% ====================================================================
+\section{Marco: gramáticas y lenguajes}
+
+\subsection{Qué es una gramática}
+
+Una gramática libre de contexto se describe con cuatro cosas,
+$G = (V, T, P, S)$:
+
+\begin{itemize}[leftmargin=*]
+  \item $V$: las \textbf{variables} o símbolos no terminales. Son los que se
+  pueden seguir reemplazando. Por convención van en mayúscula: \gram{S},
+  \gram{NP}, \gram{VP}.
+  \item $T$: los \textbf{terminales}. Son las palabras reales del lenguaje,
+  las que ya no se reemplazan por nada: \gram{she}, \gram{eats}, \gram{id},
+  \gram{+}.
+  \item $P$: las \textbf{producciones} o reglas, del tipo \gram{A -> B C}.
+  \item $S$: el \textbf{símbolo inicial}, por donde empieza toda derivación.
+\end{itemize}
+
+«Libre de contexto» significa que el lado izquierdo de cada regla es siempre
+una sola variable. No existe algo como \gram{a B -> c}: la variable \gram{B}
+se reemplaza igual sin importar qué tenga a los lados. Eso es lo que la
+distingue de las gramáticas sensibles al contexto en la jerarquía de Chomsky,
+y lo que hace que exista un algoritmo eficiente para reconocerlas.
+
+\subsection{La gramática del enunciado}
+
+\begin{lstlisting}
+S   -> NP VP
+VP  -> VP PP | V NP | cooks | drinks | eats | cuts
+PP  -> P NP
+NP  -> Det N | he | she
+V   -> cooks | drinks | eats | cuts
+P   -> in | with
+N   -> cat | dog | beer | cake | juice | meat | soup | fork | knife | oven | spoon
+Det -> a | the
+\end{lstlisting}
+
+Leída en voz alta: una oración (\gram{S}) es un sujeto (\gram{NP}) seguido de
+un predicado (\gram{VP}). Un \gram{NP} es un determinante más un sustantivo
+(\gram{the cat}) o un pronombre (\gram{he}, \gram{she}). Un \gram{VP} es un
+verbo con su objeto (\gram{eats a cake}), o un \gram{VP} con una frase
+preposicional pegada (\gram{eats a cake with a fork}), o un verbo solo
+(\gram{cooks}).
+
+\subsection{Por qué hace falta la Forma Normal de Chomsky}
+
+CYK funciona partiendo la frase en dos pedazos y preguntando, para cada
+partición, qué variable puede generar el pedazo izquierdo y cuál el derecho.
+Eso solo tiene sentido si las reglas tienen exactamente dos símbolos del lado
+derecho. Una regla como \gram{S -> A B C d} no dice dónde partir.
+
+Por eso toda producción debe quedar de una de estas dos formas:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+$A \to B\,C$ & dos variables, ninguna terminal \\
+$A \to a$    & una sola terminal \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Y además no puede haber producciones vacías ($A \to \varepsilon$) ni unitarias
+($A \to B$), porque romperían el conteo de longitudes en que se basa el
+algoritmo.
+
+% ====================================================================
+\section{Diseño de la aplicación}
+
+\subsection{Por qué Elixir}
+
+El enunciado no pide ningún lenguaje en particular. Elegimos Elixir por tres
+razones concretas:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Los tres pasos de simplificación son cálculos de punto fijo.}
+  Todos tienen la misma forma: «repite esta regla sobre un conjunto hasta que
+  el conjunto deje de crecer». En el corto del curso eso se escribió a mano
+  como $W_1, W_2, \dots$ y $Y_1, Y_2, Y_3$. En un lenguaje funcional eso es una
+  función recursiva de cuatro líneas que compara el conjunto anterior con el
+  nuevo, sin variables mutables ni banderas.
+  \item \textbf{Los conjuntos y mapas son nativos.} \texttt{MapSet} y
+  \texttt{Map} hacen que el código se parezca al pseudocódigo del libro.
+  \item \textbf{No necesita instalación de dependencias.} Todo el proyecto usa
+  solo la librería estándar.
+\end{enumerate}
+
+\subsection{Organización en módulos}
+
+La aplicación está separada en dos capas. Los módulos de abajo son funciones
+puras: reciben una gramática y devuelven otra, sin tocar la pantalla ni
+archivos. Los de arriba solo se encargan de mostrar.
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l p{9.2cm}@{}}
+\toprule
+\textrm{\textbf{Archivo}} & \textbf{Responsabilidad} \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Lógica (funciones puras)}} \\
+lib/cyk/grammar.ex  & Lee el formato \texttt{.txt}, guarda la gramática, la imprime de vuelta. \\
+lib/cyk/simplify.ex & Pasos 1 a 3: épsilon, unitarias, inútiles. \\
+lib/cyk/cnf.ex      & Paso 4: Forma Normal de Chomsky. \\
+lib/cyk/parser.ex   & Algoritmo CYK, tabla dinámica, medición de tiempo. \\
+lib/cyk/tree.ex     & Reconstruye el árbol desde los backpointers. \\
+lib/cyk.ex          & Encadena los cuatro pasos y parte la frase en tokens. \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Presentación}} \\
+lib/cyk/ui.ex       & Formato de la salida en terminal: cajas, colores, tablas. \\
+lib/cyk/svg.ex      & Dibuja el árbol y lo abre en una ventana aparte. \\
+lib/cyk/cli.ex      & Interfaz de línea de comandos y modo interactivo. \\
+lib/mix/tasks/cyk.ex & Registra el comando \texttt{mix cyk}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Esta separación no es decoración: permite que las pruebas automáticas
+verifiquen los algoritmos sin tener que simular una terminal, y permitiría
+cambiar la interfaz entera sin tocar una línea de la lógica.
+
+\subsection{Flujo del programa}
+
+\begin{center}
+\begin{tikzpicture}[
+  caja/.style={draw=borde, fill=fondo, rounded corners=3pt, minimum height=9mm,
+               inner xsep=5pt, font=\small},
+  flecha/.style={-latex, draw=gris, thick}
+]
+\node[caja] (a) {\texttt{.txt}};
+\node[caja, right=5mm of a] (b) {Gramática};
+\node[caja, right=5mm of b] (c) {Paso 1--3};
+\node[caja, right=5mm of c] (d) {Paso 4: CNF};
+\node[caja, below=7mm of d] (e) {Tabla CYK};
+\node[caja, left=5mm of e] (f) {Backpointers};
+\node[caja, left=5mm of f] (g) {Árbol};
+\node[caja, left=5mm of g] (h) {Sí / No};
+
+\draw[flecha] (a) -- (b);
+\draw[flecha] (b) -- (c);
+\draw[flecha] (c) -- (d);
+\draw[flecha] (d) -- (e);
+\draw[flecha] (e) -- (f);
+\draw[flecha] (f) -- (g);
+\draw[flecha] (e.south) -- ++(0,-6mm) -| (h.south);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Formato de entrada}
+
+Mantuvimos el mismo formato de los archivos que entregó el curso
+(\texttt{1.txt} y \texttt{1-cnf.txt}), para que el programa pueda leerlos tal
+cual:
+
+\begin{lstlisting}
+# los comentarios empiezan con numeral
+S   -> NP VP
+VP  -> VP PP | V NP | eats
+X   -> + T X | e
+\end{lstlisting}
+
+Las reglas del formato son:
+
+\begin{itemize}[leftmargin=*]
+  \item \gram{->} separa la cabeza del cuerpo; \gram{|} separa alternativas.
+  \item \textbf{Los símbolos van separados por espacios.} Por eso \gram{id} es
+  un solo token y \gram{( E )} son tres. Lo mismo al escribir la frase:
+  \gram{( id + id ) * id}.
+  \item \gram{e} representa épsilon.
+  \item Un símbolo es \textbf{no terminal} si aparece como cabeza de alguna
+  producción. Todo lo demás es terminal. Esto es más robusto que fijarse en
+  mayúsculas y permite nombres como \gram{A'}.
+  \item El \textbf{símbolo inicial} es la cabeza de la primera producción, tal
+  como lo define la presentación del curso.
+\end{itemize}
+
+Las gramáticas incluidas están en la carpeta \texttt{gramaticas/}:
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l p{8.5cm}@{}}
+\toprule
+\textrm{\textbf{Archivo}} & \textbf{Contenido} \\
+\midrule
+ingles.txt          & La del enunciado del proyecto. \\
+aritmetica.txt      & Expresiones aritméticas: el archivo \texttt{1.txt} del curso. \\
+aritmetica-cnf.txt  & El CNF de referencia (\texttt{1-cnf.txt}), usado en las pruebas. \\
+ambigua.txt         & \texttt{E -> E + E | E * E | ( E ) | id}, para ver el conteo de árboles. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ====================================================================
+\section{El algoritmo de simplificación}
+
+Los cuatro pasos se aplican en este orden, que es el que se vio en clase.
+El orden importa: por ejemplo, eliminar épsilon \emph{crea} producciones
+unitarias nuevas, así que el paso 2 tiene que ir después del paso 1.
+
+Para ilustrarlos usamos la gramática aritmética, porque la del enunciado
+—como se explica más adelante— ya viene en CNF y no ejercita ningún paso.
+
+\begin{lstlisting}
+E -> T X
+X -> + T X | e
+T -> F Y
+Y -> * F Y | e
+F -> ( E ) | id
+\end{lstlisting}
+
+\subsection{Paso 1: eliminación de producciones épsilon}
+
+\textbf{Qué busca.} Las producciones que generan la cadena vacía. Estorban
+porque CYK razona sobre longitudes de subcadena, y una variable que puede
+desaparecer rompe esa cuenta.
+
+\textbf{Cómo funciona.} Primero se calcula el conjunto de \textbf{anulables}:
+toda variable que tenga una producción vacía, más toda variable cuyo cuerpo
+esté formado únicamente por anulables. Se repite hasta que el conjunto no
+crezca. Después, por cada cuerpo, se generan todas las versiones posibles
+quitando o dejando cada símbolo anulable, y se descartan los cuerpos que
+quedaron vacíos.
+
+\textbf{En este ejemplo.} Anulables: \gram{X}, \gram{Y}.
+
+\begin{lstlisting}
+E -> T X | T
+X -> + T X | + T
+T -> F Y | F
+Y -> * F Y | * F
+F -> ( E ) | id          8 -> 10 producciones
+\end{lstlisting}
+
+Un detalle: si el símbolo inicial resultaba anulable, significa que la cadena
+vacía sí pertenece al lenguaje. Como esa información se perdería al borrar las
+épsilon, el programa la guarda aparte en una bandera de la gramática.
+
+\textbf{Dónde está.} \texttt{lib/cyk/simplify.ex}, funciones
+\texttt{epsilon/1} y \texttt{nullable/1}.
+
+\subsection{Paso 2: eliminación de producciones unitarias}
+
+\textbf{Qué busca.} Las reglas del tipo \gram{A -> B}, donde una variable
+simplemente se renombra como otra. No aportan estructura y CNF no las permite.
+
+\textbf{Cómo funciona.} Se arma el conjunto de \textbf{pares unitarios}
+$(A, B)$ tales que $A \Rightarrow^* B$ usando solo reglas unitarias. Se
+arranca con los reflexivos $(A, A)$ y se cierra transitivamente. Luego, a cada
+$A$ se le copian las producciones \textbf{no} unitarias de cada $B$ de su par.
+
+\textbf{En este ejemplo.} Pares: \gram{(E,F)}, \gram{(E,T)}, \gram{(T,F)}
+además de los reflexivos.
+
+\begin{lstlisting}
+E -> T X | ( E ) | id | F Y
+X -> + T X | + T
+T -> ( E ) | id | F Y
+Y -> * F Y | * F
+F -> ( E ) | id          10 -> 13 producciones
+\end{lstlisting}
+
+\textbf{Dónde está.} \texttt{lib/cyk/simplify.ex}, funciones
+\texttt{unit/1} y \texttt{unit\_pairs/1}.
+
+\subsection{Paso 3: eliminación de símbolos inútiles}
+
+\textbf{Qué busca.} Variables que no sirven para nada. Son de dos tipos y se
+eliminan en ese orden:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{No generadores}: variables que nunca llegan a producir una
+  cadena de puros terminales. Por ejemplo \gram{C -> a C b} sin otra
+  alternativa: siempre queda una \gram{C} pendiente.
+  \item \textbf{No alcanzables}: variables a las que nunca se llega desde el
+  símbolo inicial.
+\end{enumerate}
+
+El orden importa. Si se quitan primero los no alcanzables y después los no
+generadores, puede quedar basura: eliminar una variable no generadora puede
+dejar a otras sin forma de alcanzarse.
+
+\textbf{En este ejemplo.} No hay ninguno de los dos tipos, la gramática queda
+igual (13 producciones). Donde sí se nota es en el ejemplo del corto del curso:
+
+\begin{lstlisting}
+Original:                    Despues de los pasos 1 y 2:
+  S -> a S | A | C             S -> a S | a | a C b
+  A -> a                       A -> a
+  B -> a a                     B -> a a
+  C -> a C b                   C -> a C b
+\end{lstlisting}
+
+\begin{lstlisting}
+C no genera terminales      -> se elimina C (y la regla S -> a C b)
+A y B ya no son alcanzables -> se eliminan
+
+resultado:  S -> a S | a
+\end{lstlisting}
+
+\textbf{Dónde está.} \texttt{lib/cyk/simplify.ex}, funciones
+\texttt{useless/1}, \texttt{generating/1} y \texttt{reachable/1}.
+
+\subsection{Paso 4: Forma Normal de Chomsky}
+
+\textbf{Qué busca.} Dejar toda producción como $A \to BC$ o $A \to a$. Son dos
+sub-pasos:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Sacar los terminales de los cuerpos largos.} Un cuerpo como
+  \gram{( E )} mezcla terminales con variables. Cada terminal se reemplaza por
+  una variable nueva que solo produce ese terminal: \gram{T1 -> (}.
+  \item \textbf{Binarizar.} Un cuerpo de tres o más símbolos se parte en
+  cadena: \gram{A -> B C D} se vuelve \gram{A -> B X1} junto con
+  \gram{X1 -> C D}.
+\end{enumerate}
+
+\textbf{En este ejemplo.} Variables nuevas: \gram{T1}$\to$\gram{(},
+\gram{T2}$\to$\gram{)}, \gram{T3}$\to$\gram{+}, \gram{T4}$\to$\gram{*},
+\gram{X1}$\to$\gram{E T2}, \gram{X2}$\to$\gram{T X}, \gram{X3}$\to$\gram{F Y}.
+
+\begin{lstlisting}
+E  -> T X | T1 X1 | id | F Y
+X  -> T3 X2 | T3 T
+T  -> T1 X1 | id | F Y
+Y  -> T4 X3 | T4 F
+F  -> T1 X1 | id
+T1 -> (        T2 -> )        T3 -> +        T4 -> *
+X1 -> E T2     X2 -> T X      X3 -> F Y
+
+                                              13 -> 20 producciones
+\end{lstlisting}
+
+\textbf{Comparación con el CNF de referencia.} El curso entregó el archivo
+\texttt{1-cnf.txt} con la conversión esperada. Nuestro resultado tiene las
+mismas 20 producciones y la misma estructura; solo cambian los nombres de las
+variables nuevas, que son arbitrarios:
+
+\begin{center}
+\begin{tabular}{@{}llllllll@{}}
+\toprule
+Referencia & \gram{L} & \gram{R} & \gram{P} & \gram{M} & \gram{Z} & \gram{W} & \gram{V} \\
+Nuestro    & \gram{T1} & \gram{T2} & \gram{T3} & \gram{T4} & \gram{X1} & \gram{X2} & \gram{X3} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Dónde está.} \texttt{lib/cyk/cnf.ex}.
+
+% ====================================================================
+\section{El algoritmo CYK}
+
+\subsection{La idea}
+
+CYK es programación dinámica. En vez de intentar derivar la frase de arriba
+hacia abajo, construye la respuesta de abajo hacia arriba: primero resuelve
+las subcadenas de una palabra, después las de dos, y así hasta cubrir la
+frase completa.
+
+La pregunta que responde cada celda de la tabla es: \textit{¿qué variables
+pueden generar esta subcadena?}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Subcadenas de longitud 1.} Para la palabra \gram{cake}, se
+  buscan todas las variables con una regla \gram{A -> cake}. Aquí: \gram{N}.
+  \item \textbf{Subcadenas más largas.} Se prueban todas las formas de partir
+  la subcadena en dos. Para cada partición, si la mitad izquierda la puede
+  generar \gram{B}, la derecha la puede generar \gram{C}, y existe una regla
+  \gram{A -> B C}, entonces \gram{A} puede generar la subcadena entera.
+\end{itemize}
+
+Al final, la frase pertenece al lenguaje si y solo si el \textbf{símbolo
+inicial} aparece en la celda que cubre la frase completa.
+
+\subsection{La tabla, con un ejemplo}
+
+Para \textit{she eats a cake with a fork}, con las filas numeradas por
+longitud de subcadena:
+
+\begin{center}
+\ttfamily\footnotesize
+\begin{tabular}{@{}r|ccccccc@{}}
+   & she & eats & a   & cake & with & a   & fork \\
+\midrule
+ 1 & NP  & V,VP & Det & N    & P    & Det & N \\
+ 2 & S   & ·    & NP  & ·    & ·    & NP  &   \\
+ 3 & ·   & VP   & ·   & ·    & PP   &     &   \\
+ 4 & S   & ·    & ·   & ·    &      &     &   \\
+ 5 & ·   & ·    & ·   &      &      &     &   \\
+ 6 & ·   & VP   &     &      &      &     &   \\
+ 7 & S   &      &     &      &      &     &   \\
+\end{tabular}
+\end{center}
+
+Se lee así: la celda de la fila 2, columna \gram{a}, contiene \gram{NP}, lo
+que dice que \textit{a cake} puede generarse desde \gram{NP}. La celda de
+abajo a la izquierda (fila 7, columna \gram{she}) cubre la frase entera y
+contiene \gram{S}, el símbolo inicial. Por lo tanto la frase \textbf{sí}
+pertenece al lenguaje.
+
+\subsection{Backpointers y el árbol}
+
+Si cada celda guardara solo «sí, esta variable puede», la respuesta sería un
+booleano y nada más. Para poder construir el árbol, cada entrada guarda además
+\textbf{de dónde salió}: con qué regla y en qué punto se partió la subcadena.
+Eso es un \textit{backpointer}.
+
+Reconstruir el árbol es entonces seguir esos punteros hacia atrás desde la
+celda final. El resultado para la frase del ejemplo:
+
+\begin{center}
+\begin{forest}
+for tree={font=\small\ttfamily, s sep=4mm, l sep=6mm, edge={draw=gris}}
+[S
+  [NP [she, font=\small\ttfamily\color{acento}]]
+  [VP
+    [VP
+      [V [eats, font=\small\ttfamily\color{acento}]]
+      [NP [Det [a, font=\small\ttfamily\color{acento}]] [N [cake, font=\small\ttfamily\color{acento}]]]
+    ]
+    [PP
+      [P [with, font=\small\ttfamily\color{acento}]]
+      [NP [Det [a, font=\small\ttfamily\color{acento}]] [N [fork, font=\small\ttfamily\color{acento}]]]
+    ]
+  ]
+]
+\end{forest}
+\end{center}
+
+El programa muestra este árbol de dos maneras: dibujado en texto dentro de la
+terminal, y dibujado como gráfico en una ventana aparte que se abre
+automáticamente.
+
+Los backpointers sirven para una cosa más: \textbf{contar cuántos árboles
+distintos existen}, que es exactamente la definición de ambigüedad. Si una
+celda tiene dos backpointers para la misma variable, hay dos derivaciones.
+
+\subsection{Complejidad}
+
+Son tres bucles anidados —longitud, posición inicial, punto de partición— y
+dentro de cada uno se recorren las reglas. Eso da
+$\mathcal{O}(n^3 \cdot |G|)$, donde $n$ es la cantidad de palabras y $|G|$ el
+tamaño de la gramática.
+
+Para las frases de este proyecto eso es nada: una frase de siete palabras se
+resuelve en unos 14 microsegundos.
+
+\textbf{Dónde está.} \texttt{lib/cyk/parser.ex} (tabla y conteo de árboles),
+\texttt{lib/cyk/tree.ex} (reconstrucción), \texttt{lib/cyk/svg.ex} (dibujo).
+
+% ====================================================================
+\section{Cómo ejecutar el programa}
+
+Lo único que hay que tener instalado es Elixir 1.14 o superior. El proyecto no
+usa librerías externas, así que no hay dependencias que descargar.
+
+\begin{lstlisting}
+mix cyk                              # modo interactivo
+mix cyk gramaticas/aritmetica.txt    # otra gramatica
+mix cyk --frase "she eats a cake"    # valida una frase y sale
+mix cyk --pasos                      # muestra cada gramatica intermedia
+mix cyk --sin-ventana                # no abre el arbol en el navegador
+mix cyk --repetir 1000               # fija las corridas de la medicion
+mix test                             # las pruebas automaticas
+\end{lstlisting}
+
+Dentro del modo interactivo se pueden usar los comandos \gram{:gramatica},
+\gram{:cnf}, \gram{:pasos} y \gram{:salir}.
+
+La salida muestra, en orden: el resumen de la gramática, los cuatro pasos de
+simplificación con cuántas producciones entran y salen de cada uno, la
+gramática en CNF, el veredicto, el tiempo, la cantidad de árboles, la tabla
+CYK y el árbol de derivación.
+
+% ====================================================================
+\section{Ejemplos y pruebas}
+
+\subsection{Frases que sí están en el lenguaje}
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l p{7.5cm}@{}}
+\toprule
+\textrm{\textbf{Frase}} & \textbf{Por qué} \\
+\midrule
+she eats a cake with a fork & \gram{NP VP}, con \gram{VP -> VP PP}. \\
+the cat drinks the beer     & Los dos \gram{NP} son \gram{Det N}. \\
+he drinks the beer          & \gram{NP} pronombre. \\
+she cooks                   & \gram{VP} de un solo verbo. \\
+a dog cuts the meat with a knife & El caso más largo, siete palabras. \\
+he eats the soup in the oven & Usa la otra preposición. \\
+the cake eats               & Correcta sintácticamente aunque absurda. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+El último caso merece un comentario. \textit{The cake eats} se acepta porque
+\gram{the cake} es un \gram{NP} válido y \gram{eats} es un \gram{VP} válido.
+La gramática no sabe nada de qué cosas pueden comer. El enunciado lo advierte
+explícitamente: las frases aceptadas son sintácticamente correctas, nadie
+garantiza que lo sean semánticamente.
+
+\subsection{Frases que no están en el lenguaje}
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l p{7.5cm}@{}}
+\toprule
+\textrm{\textbf{Frase}} & \textbf{Por qué falla} \\
+\midrule
+eats she a cake     & Empieza con verbo; \gram{S} exige \gram{NP} primero. \\
+a cat with the dog  & Es \gram{NP PP}, le falta el \gram{VP}. \\
+she eats a          & \gram{a} es \gram{Det} y queda sin sustantivo. \\
+cat the drinks beer & \gram{cat} suelto es \gram{N}, no \gram{NP}. \\
+she eats a cake with & La preposición queda colgando sin \gram{NP}. \\
+banana              & No es terminal de la gramática. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+En el último caso el programa además avisa \texttt{Desconocidos: banana}, para
+distinguir «la frase está mal armada» de «esa palabra no existe en la
+gramática».
+
+\subsection{Expresiones aritméticas}
+
+Con \texttt{gramaticas/aritmetica.txt}. Recordar que los símbolos van
+separados por espacios.
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l c >{\ttfamily}l c@{}}
+\toprule
+\textrm{\textbf{Acepta}} & & \textrm{\textbf{Rechaza}} & \\
+\midrule
+id                  & sí & + id     & no \\
+id + id             & sí & id +     & no \\
+( id )              & sí & ( id     & no \\
+( id + id ) * id    & sí & id id    & no \\
+id * ( id + id )    & sí & * id *   & no \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Ambigüedad}
+
+Con \texttt{gramaticas/ambigua.txt}, que contiene
+\gram{E -> E + E | E * E | ( E ) | id}. Esta gramática no define precedencia,
+así que una misma expresión admite varias lecturas:
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l c@{}}
+\toprule
+\textrm{\textbf{Expresión}} & \textbf{Árboles} \\
+\midrule
+id + id             & 1 \\
+id + id * id        & 2 \\
+id + id * id + id   & 5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Los números 1, 2, 5 son los números de Catalan, que es justo la cantidad de
+formas de parentizar una expresión. El programa reporta esta cuenta junto al
+veredicto.
+
+\subsection{Tiempos de ejecución}
+
+Medidos en la máquina de desarrollo, con la gramática del enunciado:
+
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Frase} & \textbf{Palabras} & \textbf{Tiempo} \\
+\midrule
+\texttt{she cooks}                   & 2 & 7.9 µs \\
+\texttt{cat the drinks beer}         & 4 & 13.4 µs \\
+\texttt{she eats a cake with a fork} & 7 & 13.8 µs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Pruebas automáticas}
+
+El proyecto incluye \textbf{41 pruebas} que corren con \texttt{mix test}.
+Están en la carpeta \texttt{test/}:
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily}l p{8cm}@{}}
+\toprule
+\textrm{\textbf{Archivo}} & \textbf{Qué verifica} \\
+\midrule
+grammar\_test.exs  & Lectura del formato, comentarios, épsilon, símbolo inicial. \\
+simplify\_test.exs & Los tres pasos, con los ejemplos resueltos a mano en el corto del curso. \\
+cnf\_test.exs      & Que toda producción quede $A \to BC$ o $A \to a$, y la equivalencia con el CNF de referencia. \\
+cyk\_test.exs      & Frases aceptadas y rechazadas, conteo de árboles, forma del árbol. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+La prueba de equivalencia merece explicación. No se puede comparar nuestro CNF
+contra el \texttt{1-cnf.txt} del curso línea por línea, porque los nombres de
+las variables nuevas son arbitrarios (nuestro \gram{T1} es su \gram{L}). Lo
+que sí tiene sentido es comparar \textbf{comportamiento}: la prueba corre CYK
+con las dos gramáticas sobre una lista de cadenas y verifica que acepten y
+rechacen exactamente las mismas.
+
+% ====================================================================
+\section{Discusión}
+
+\subsection{Obstáculos encontrados}
+
+\paragraph{Programación dinámica sin variables mutables.}
+Este fue el obstáculo conceptual principal. CYK se enseña con una matriz que
+se va llenando, y en Elixir no existen las variables mutables. La solución
+salió de observar una propiedad del algoritmo: CYK llena la tabla
+\textbf{por longitud creciente}, así que cuando se calcula una celda, todas
+las que necesita ya están escritas y solamente se leen. Nunca hay que
+modificar algo ya calculado. Eso convierte la matriz en un \texttt{Map} que se
+pasa como acumulador de un \texttt{reduce}, sin perder nada de eficiencia y
+sin trucos.
+
+\paragraph{El reloj del sistema no alcanza para medir.}
+El enunciado pide reportar el tiempo de validación. La primera versión usaba
+\texttt{:timer.tc} y reportaba \texttt{0.000 ms}. Investigando resultó que el
+reloj monotónico del sistema operativo tiene una resolución de unos 100
+microsegundos en Windows, y una validación tarda unos 14. Es decir, el
+instrumento era más grueso que lo que se quería medir. La solución fue repetir
+la validación hasta superar un umbral de tiempo y dividir el total entre el
+número de corridas.
+
+\paragraph{El calentamiento de la máquina virtual.}
+Relacionado con lo anterior: la primera ejecución medía 1.3 ms y las
+siguientes 0.013 ms, cien veces menos. La causa es el compilador JIT de la
+BEAM, que optimiza el código recién después de ejecutarlo varias veces.
+Reportar la primera corrida habría dado un número engañoso. El esquema de
+promediar varias corridas resuelve también este problema.
+
+\paragraph{Variables duplicadas en la binarización.}
+La primera versión de la binarización creaba una variable nueva por cada
+cuerpo largo que encontraba. Como \gram{( E )} aparece en tres reglas
+distintas, generaba \gram{X1}, \gram{X3} y \gram{X5} con el mismo contenido
+\gram{E T2}, dando 22 producciones donde el CNF de referencia tiene 20. Se
+agregó un registro de pares ya encadenados para reutilizarlos. Con eso el
+resultado coincide exactamente en tamaño y estructura con el del curso.
+
+\paragraph{La gramática del enunciado ya estaba en CNF.}
+Al correr los cuatro pasos sobre la gramática del proyecto, ninguno cambió
+nada. No era un error: revisando regla por regla, todas son ya de la forma
+$A \to BC$ o $A \to a$, no hay épsilon, no hay unitarias y no hay símbolos
+inútiles. \gram{VP -> cooks} parece unitaria pero no lo es, porque
+\gram{cooks} es terminal, no variable. Por eso agregamos la gramática
+aritmética del curso, que sí ejercita los cuatro pasos de principio a fin.
+
+\paragraph{Una ventana que colgaba el programa.}
+El árbol se abre en una ventana aparte. La primera implementación usaba
+\texttt{cmd /c start}, y el programa se quedaba congelado hasta que uno
+cerrara el navegador. La razón es que el navegador heredaba la salida estándar
+del proceso y Elixir esperaba a que se cerrara. Se cambió a
+\texttt{explorer.exe}, que lanza el visor y devuelve de inmediato.
+
+\paragraph{Una prueba mal escrita.}
+Habíamos puesto \textit{the cake eats} en la lista de frases que deberían
+rechazarse, y la prueba falló. Revisando, el programa tenía razón y nosotros
+no: la frase es sintácticamente correcta. Pasó a la lista de aceptadas, y
+terminó siendo el mejor ejemplo de la advertencia del enunciado.
+
+\subsection{Recomendaciones}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Separar la lógica de la interfaz desde el principio.} Permitió
+  escribir pruebas sin simular una terminal, y cambiar la presentación sin
+  riesgo de romper los algoritmos.
+  \item \textbf{Usar el ejemplo resuelto del curso como prueba automática.}
+  Tener \texttt{1.txt} y \texttt{1-cnf.txt} y poder verificar la equivalencia
+  entre ambos dio mucha más confianza que revisar la salida a ojo.
+  \item \textbf{Desconfiar de las mediciones de tiempo muy chicas.} Si el
+  número sale 0 o varía cien veces entre corridas, el problema casi siempre
+  está en el instrumento, no en el algoritmo.
+  \item \textbf{Cuando una prueba falla, revisar primero la prueba.} En nuestro
+  caso el código estaba bien y el error era nuestro entendimiento de la
+  gramática.
+  \item \textbf{Para una próxima versión}, se podría mostrar todos los árboles
+  cuando la frase es ambigua, en vez de uno solo más la cuenta. La información
+  ya está en los backpointers; solo falta recorrerlos exhaustivamente.
+\end{itemize}
+
+% ====================================================================
+\section{Conclusiones}
+
+El programa cumple lo que pide el enunciado: implementa el algoritmo de
+simplificación de gramáticas, implementa CYK, responde sí o no, reporta el
+tiempo de validación y construye el árbol de derivación.
+
+Más allá de eso, el ejercicio dejó claro por qué la Forma Normal de Chomsky no
+es un capricho del libro: es la condición que hace posible atacar el problema
+con programación dinámica. Sin la restricción de dos símbolos por cuerpo, no
+hay dónde partir la subcadena y el algoritmo no existe.
+
+También quedó claro que la elección de un lenguaje funcional, que al principio
+parecía un obstáculo para implementar programación dinámica, terminó siendo
+una ventaja. Los tres pasos de simplificación son cálculos de punto fijo y se
+escriben casi igual que en la pizarra, y la tabla de CYK resultó no necesitar
+mutación en ningún momento.
+
+% ====================================================================
+\section{Referencias}
+
+\begin{itemize}[leftmargin=*]
+  \item Hopcroft, J., Motwani, R. y Ullman, J. \textit{Introduction to Automata
+  Theory, Languages, and Computation}. 3ª edición.
+  \item Aho, A., Lam, M., Sethi, R. y Ullman, J. \textit{Compiladores:
+  principios, técnicas y herramientas}. 2ª edición.
+  \item Material del curso: presentación de introducción a gramáticas,
+  Laboratorio 6 y Corto 2.
+\end{itemize}
+
+\end{document}

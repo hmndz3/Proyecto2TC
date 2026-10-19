@@ -10,3 +10,11 @@ erl_crash.dump
 /cyk.bat
 # arbol generado al validar una frase
 /arbol.html
+# artefactos de LaTeX
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.xdv
+# guia de estudio, uso interno
+/GUIA-ESTUDIO.md
