@@ -139,10 +139,17 @@ defmodule Cyk.Svg do
     """
   end
 
-  @doc "Abre el archivo con el programa por defecto del sistema."
+  @doc """
+  Abre el archivo con el programa por defecto del sistema.
+
+  En Windows se usa explorer.exe y no `cmd /c start`: con start, el navegador
+  hereda la salida estandar del puerto y System.cmd se queda esperando a que
+  lo cierres. explorer.exe lanza el visor y devuelve de inmediato (con codigo
+  de salida 1, que aqui se ignora).
+  """
   def open(ruta) do
     case :os.type() do
-      {:win32, _} -> System.cmd("cmd", ["/c", "start", "", ruta])
+      {:win32, _} -> System.cmd("explorer.exe", [windows(ruta)])
       {:unix, :darwin} -> System.cmd("open", [ruta])
       _ -> System.cmd("xdg-open", [ruta])
     end
@@ -151,4 +158,6 @@ defmodule Cyk.Svg do
   rescue
     _ -> {:error, :sin_visor}
   end
+
+  defp windows(ruta), do: String.replace(ruta, "/", "\\")
 end

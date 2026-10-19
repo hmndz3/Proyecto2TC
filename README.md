@@ -39,6 +39,13 @@ mix cyk --ayuda
 
 Comandos dentro del modo interactivo: `:gramatica`, `:cnf`, `:pasos`, `:salir`.
 
+También se puede generar un ejecutable que corre sin `mix`:
+
+```bash
+mix escript.build
+./cyk --frase "she eats a cake"
+```
+
 Las pruebas:
 
 ```bash
