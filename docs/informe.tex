@@ -169,13 +169,18 @@ razones concretas:
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Los tres pasos de simplificación son cálculos de punto fijo.}
-  Todos tienen la misma forma: «repite esta regla sobre un conjunto hasta que
-  el conjunto deje de crecer». En el corto del curso eso se escribió a mano
-  como $W_1, W_2, \dots$ y $Y_1, Y_2, Y_3$. En un lenguaje funcional eso es una
-  función recursiva de cuatro líneas que compara el conjunto anterior con el
-  nuevo, sin variables mutables ni banderas.
-  \item \textbf{Los conjuntos y mapas son nativos.} \texttt{MapSet} y
-  \texttt{Map} hacen que el código se parezca al pseudocódigo del libro.
+  Todos tienen la misma forma: se aplica una regla sobre un conjunto una y otra
+  vez, hasta que el conjunto deja de crecer. En un lenguaje funcional eso se
+  escribe como una función recursiva corta que compara el conjunto anterior con
+  el nuevo y se detiene cuando son iguales. No hacen falta variables mutables
+  ni banderas de control.
+  \item \textbf{Los conjuntos y los mapas vienen con el lenguaje.} Elixir trae
+  \texttt{MapSet} y \texttt{Map} listos para usar, y resultan ser justo las dos
+  estructuras que este problema necesita: conjuntos para los anulables, los
+  generadores y los alcanzables; mapas para las reglas de la gramática y para
+  la tabla de CYK. Operaciones como «agregar al conjunto si todavía no está» o
+  «buscar todas las reglas que tengan este par» quedan en una línea, sin tener
+  que programar la estructura de datos.
   \item \textbf{No necesita instalación de dependencias.} Todo el proyecto usa
   solo la librería estándar.
 \end{enumerate}
@@ -372,7 +377,7 @@ generadores, puede quedar basura: eliminar una variable no generadora puede
 dejar a otras sin forma de alcanzarse.
 
 \textbf{En este ejemplo.} No hay ninguno de los dos tipos, la gramática queda
-igual (13 producciones). Donde sí se nota es en el ejemplo del corto del curso:
+igual (13 producciones). Donde sí se nota es en un caso como el siguiente:
 
 \begin{lstlisting}
 Original:                    Despues de los pasos 1 y 2:
@@ -679,7 +684,7 @@ Están en la carpeta \texttt{test/}:
 \textrm{\textbf{Archivo}} & \textbf{Qué verifica} \\
 \midrule
 grammar\_test.exs  & Lectura del formato, comentarios, épsilon, símbolo inicial. \\
-simplify\_test.exs & Los tres pasos, con los ejemplos resueltos a mano en el corto del curso. \\
+simplify\_test.exs & Los tres pasos, contra gramáticas pequeñas resueltas a mano paso por paso. \\
 cnf\_test.exs      & Que toda producción quede $A \to BC$ o $A \to a$, y la equivalencia con el CNF de referencia. \\
 cyk\_test.exs      & Frases aceptadas y rechazadas, conteo de árboles, forma del árbol. \\
 \bottomrule
@@ -781,7 +786,7 @@ simplificación de gramáticas, implementa CYK, responde sí o no, reporta el
 tiempo de validación y construye el árbol de derivación.
 
 Más allá de eso, el ejercicio dejó claro por qué la Forma Normal de Chomsky no
-es un capricho del libro: es la condición que hace posible atacar el problema
+es un requisito arbitrario: es la condición que hace posible atacar el problema
 con programación dinámica. Sin la restricción de dos símbolos por cuerpo, no
 hay dónde partir la subcadena y el algoritmo no existe.
 
@@ -799,8 +804,7 @@ mutación en ningún momento.
   Theory, Languages, and Computation}. 3ª edición.
   \item Aho, A., Lam, M., Sethi, R. y Ullman, J. \textit{Compiladores:
   principios, técnicas y herramientas}. 2ª edición.
-  \item Material del curso: presentación de introducción a gramáticas,
-  Laboratorio 6 y Corto 2.
+  \item Material del curso: presentación de introducción a gramáticas y laboratorios.
 \end{itemize}
 
 \end{document}
