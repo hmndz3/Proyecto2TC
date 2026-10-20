@@ -10,6 +10,7 @@
 \usepackage{forest}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
+\usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 
 \definecolor{gris}{HTML}{6B7280}
@@ -439,6 +440,14 @@ Nuestro    & \gram{T1} & \gram{T2} & \gram{T3} & \gram{T4} & \gram{X1} & \gram{X
 
 \textbf{Dónde está.} \texttt{lib/cyk/cnf.ex}.
 
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.88\textwidth]{img/simplificacion.png}
+\caption{\texttt{mix cyk gramaticas/aritmetica.txt --pasos} — los cuatro pasos
+sobre la gramática aritmética, con el conteo de producciones de cada uno y la
+gramática resultante en CNF.}
+\end{figure}
+
 % ====================================================================
 \section{El algoritmo CYK}
 
@@ -463,6 +472,29 @@ pueden generar esta subcadena?}
 
 Al final, la frase pertenece al lenguaje si y solo si el \textbf{símbolo
 inicial} aparece en la celda que cubre la frase completa.
+
+\subsection{Qué es la programación dinámica}
+
+La programación dinámica es una técnica para problemas que cumplen dos
+condiciones: se pueden partir en subproblemas más chicos, y esos subproblemas
+\textbf{se repiten}. La idea es resolver cada uno una sola vez y guardar el
+resultado en una tabla, en vez de recalcularlo cada vez que hace falta.
+
+CYK cumple las dos. El subproblema es «¿qué variables generan la subcadena que
+empieza en $i$ y mide $\ell$ palabras?», y se repite constantemente: al validar
+\textit{she eats a cake with a fork}, el pedazo \textit{a cake} se necesita para
+armar \textit{eats a cake}, y otra vez para \textit{eats a cake with a fork}.
+Resolverlo cada vez por separado llevaría a un costo exponencial; guardándolo,
+el algoritmo queda en $\mathcal{O}(n^3 \cdot |G|)$.
+
+Hay dos formas de implementarla. La \textbf{memoización} es recursión que
+guarda lo que ya calculó, de arriba hacia abajo. La \textbf{tabulación} llena
+la tabla directamente de abajo hacia arriba, en un orden que garantiza que cada
+celda encuentre listas las que necesita. Nosotros usamos la segunda: la tabla
+se recorre por longitud creciente, y cada celda consulta únicamente celdas de
+filas anteriores. En el código es un \texttt{Map} indexado por
+\texttt{\{posición, longitud\}} que se va pasando de una iteración a la
+siguiente.
 
 \subsection{La tabla, con un ejemplo}
 
@@ -566,6 +598,14 @@ CYK y el árbol de derivación.
 
 % ====================================================================
 \section{Ejemplos y pruebas}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.88\textwidth]{img/validacion.png}
+\caption{\texttt{mix cyk --frase "she eats a cake with a fork"} — el veredicto,
+el tiempo de validación, la cantidad de árboles y la tabla CYK. Debajo de esto
+el programa imprime además el árbol de derivación de la sección 5.3.}
+\end{figure}
 
 \subsection{Frases que sí están en el lenguaje}
 
