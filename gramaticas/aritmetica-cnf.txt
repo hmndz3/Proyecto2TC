@@ -1,4 +1,4 @@
-# CNF de referencia entregada por el curso (archivo 1-cnf.txt).
+# CNF de referencia (archivo 1-cnf.txt).
 # Se usa en las pruebas para comprobar que nuestra conversion es equivalente.
 E -> T X | F Y | L Z | id
 X -> P W | P T

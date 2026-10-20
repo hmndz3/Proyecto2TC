@@ -1,4 +1,3 @@
-# Gramatica de expresiones aritmeticas (Lab 6 / archivo 1.txt)
 # Los simbolos van separados por espacios: "id" es un token, "( E )" son tres.
 E -> T X
 X -> + T X | e

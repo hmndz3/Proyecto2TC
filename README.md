@@ -74,7 +74,7 @@ Gramáticas incluidas en `gramaticas/`:
 | Archivo | Contenido |
 |---|---|
 | `ingles.txt` | la del enunciado del proyecto |
-| `aritmetica.txt` | expresiones aritméticas (el archivo `1.txt` del curso) |
+| `aritmetica.txt` | expresiones aritméticas (el archivo de referencia `1.txt`) |
 | `aritmetica-cnf.txt` | el CNF de referencia (`1-cnf.txt`), usado en las pruebas |
 | `ambigua.txt` | `E -> E + E \| E * E \| ( E ) \| id`, para ver el contador de árboles |
 
@@ -147,7 +147,7 @@ que las siguientes.
   inútiles. Los cuatro pasos corren igual y la dejan intacta. La que sí ejercita
   la simplificación completa es `aritmetica.txt`.
 - Nuestro CNF de `aritmetica.txt` da 20 producciones, las mismas del
-  `aritmetica-cnf.txt` del curso, con los nombres de las variables nuevas
+  `aritmetica-cnf.txt` de referencia, con los nombres de las variables nuevas
   cambiados (`L=T1`, `R=T2`, `P=T3`, `M=T4`, `Z=X1`, `W=X2`, `V=X3`). Como esos
   nombres son arbitrarios, la prueba compara **equivalencia**: que ambas
   gramáticas acepten y rechacen exactamente las mismas cadenas.

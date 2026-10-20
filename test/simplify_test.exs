@@ -4,7 +4,7 @@ defmodule SimplifyTest do
   alias Cyk.{Grammar, Simplify}
 
   describe "paso 1 - produccciones epsilon" do
-    # Corto 2, problema 3
+    # gramatica con tres variables anulables encadenadas
     setup do
       g =
         Grammar.parse("""
@@ -50,7 +50,7 @@ defmodule SimplifyTest do
   end
 
   describe "paso 2 - producciones unitarias" do
-    # Corto 2, problema 5
+    # gramatica con unitarias y simbolos inutiles
     setup do
       %{g: Grammar.parse("S -> a S | A | C\nA -> a\nB -> a a\nC -> a C b")}
     end

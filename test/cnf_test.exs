@@ -26,7 +26,7 @@ defmodule CnfTest do
                length(encadenadas)
     end
 
-    test "coincide en tamano con el CNF de referencia del curso" do
+    test "coincide en tamano con el CNF de referencia" do
       p = Cyk.preparar_archivo("gramaticas/aritmetica.txt")
       referencia = Grammar.load!("gramaticas/aritmetica-cnf.txt")
 
